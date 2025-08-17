@@ -16,19 +16,23 @@ export const getTaskCounts = async (req, res) => {
   try {
     const { role, id: userId } = req.user;
 
-    let totalTasks, totalPending, totalInProgress, totalCompleted;
+    let matchQuery = {};
 
-    if (role === "admin") {
-      totalTasks = await Task.countDocuments();
-      totalPending = await Task.countDocuments({ status: "pending" });
-      totalInProgress = await Task.countDocuments({ status: "in-progress" });
-      totalCompleted = await Task.countDocuments({ status: "completed" });
-    } else {
-      totalTasks = await Task.countDocuments({ createdBy: userId });
-      totalPending = await Task.countDocuments({ status: "pending", createdBy: userId });
-      totalInProgress = await Task.countDocuments({ status: "in-progress", createdBy: userId });
-      totalCompleted = await Task.countDocuments({ status: "completed", createdBy: userId });
+    if (role !== "admin") {
+      matchQuery = {
+        $or: [
+          { createdBy: userId },
+          { assignedTo: userId }
+        ]
+      };
     }
+
+    const [totalTasks, totalPending, totalInProgress, totalCompleted] = await Promise.all([
+      Task.countDocuments(role === "admin" ? {} : matchQuery),
+      Task.countDocuments({ ...matchQuery, status: "pending" }),
+      Task.countDocuments({ ...matchQuery, status: "in-progress" }),
+      Task.countDocuments({ ...matchQuery, status: "completed" }),
+    ]);
 
     return res.status(200).json({
       success: true,
@@ -47,6 +51,7 @@ export const getTaskCounts = async (req, res) => {
     });
   }
 };
+
 
 export const CreateTask = async (req, res) => {
   try {
@@ -82,7 +87,7 @@ export const getAllTasks = async (req, res) => {
     const { role, id: userId } = req.user;
     const keyword = req.query.keyword || "";
 
-    const baseQuery = {
+    let baseQuery = {
       $or: [
         { title: { $regex: keyword, $options: "i" } },
         { description: { $regex: keyword, $options: "i" } },
@@ -90,7 +95,18 @@ export const getAllTasks = async (req, res) => {
     };
 
     if (role !== "admin") {
-      baseQuery.createdBy = userId;
+      // Show tasks either created by user OR assigned to user
+      baseQuery = {
+        $and: [
+          baseQuery,
+          {
+            $or: [
+              { createdBy: userId },
+              { assignedTo: userId }
+            ]
+          }
+        ]
+      };
     }
 
     const tasks = await Task.find(baseQuery);
