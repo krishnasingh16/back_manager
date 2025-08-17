@@ -18,7 +18,7 @@ app.use(express.json())
 app.use(express.urlencoded({extended:true}));
 app.use(cookieParser())
 const corsOption ={
-      origin:"*",
+      origin:"https://back-manager.onrender.com",
       credentials:true
 }
 app.use(cors(corsOption))
